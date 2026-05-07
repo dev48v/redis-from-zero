@@ -9,6 +9,7 @@ import cors from 'cors';
 import { config } from './config.js';
 import { log } from './logger.js';
 import { redis, isRedisReady } from './redis.js';
+import { lookupRouter } from './lookupRoute.js';
 
 const app = express();
 
@@ -54,6 +55,8 @@ app.get('/readyz', async (_req, res) => {
     res.status(503).json({ status: 'redis_ping_failed', error: err.message });
   }
 });
+
+app.use('/api', lookupRouter);
 
 // 404 fallback after every real route is registered. We register it inside
 // `start()` so future steps can `app.use(...)` more routes before this fires.
