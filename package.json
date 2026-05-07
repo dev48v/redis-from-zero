@@ -1,0 +1,19 @@
+{
+  "name": "redis-from-zero",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Redis-backed IP Geolocation Explorer — cache-aside pattern, Express + React, step-by-step build for beginners.",
+  "workspaces": [
+    "server",
+    "client"
+  ],
+  "scripts": {
+    "dev:server": "npm run dev --workspace=server",
+    "dev:client": "npm run dev --workspace=client",
+    "build:client": "npm run build --workspace=client",
+    "start:server": "npm run start --workspace=server"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
