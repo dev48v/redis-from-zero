@@ -57,6 +57,17 @@ lookupRouter.get('/lookup/:query', async (req, res) => {
     if (cachedJson) {
       res.set('X-Cache', 'HIT');
       res.set('X-Cache-TTL', String(ttl));
+      // Fire-and-forget counters + recent list. Pipelined so the three
+      // mutations cost one round trip instead of three. We don't await the
+      // result on the response path — the user shouldn't pay for stats
+      // upkeep latency, and any failure here is safe to drop.
+      redis.pipeline()
+        .incr('stats:hits')
+        .lpush('recent:lookups', query)
+        .ltrim('recent:lookups', 0, config.recentListMax - 1)
+        .exec()
+        .catch((err) => log.warn('stats.update_failed', { message: err.message }));
+
       // We stored JSON — parse so the response is a real object, not a
       // string-of-JSON. The frontend would still work either way, but JSON
       // bodies are friendlier in browser devtools and curl.
@@ -70,7 +81,14 @@ lookupRouter.get('/lookup/:query', async (req, res) => {
     // SETEX = SET + EXPIRE in one atomic command. Critical: doing SET then
     // EXPIRE separately leaves a window where the key has no TTL, which is
     // a classic "Redis is full of orphan keys" production incident.
-    await redis.setex(key, config.cacheTtlSeconds, json);
+    // Pipelined alongside the stats writes — one round trip total.
+    redis.pipeline()
+      .setex(key, config.cacheTtlSeconds, json)
+      .incr('stats:misses')
+      .lpush('recent:lookups', query)
+      .ltrim('recent:lookups', 0, config.recentListMax - 1)
+      .exec()
+      .catch((err) => log.warn('cache.write_failed', { message: err.message }));
 
     res.set('X-Cache', 'MISS');
     res.set('X-Cache-TTL', String(config.cacheTtlSeconds));

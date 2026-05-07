@@ -10,6 +10,7 @@ import { config } from './config.js';
 import { log } from './logger.js';
 import { redis, isRedisReady } from './redis.js';
 import { lookupRouter } from './lookupRoute.js';
+import { statsRouter } from './statsRoute.js';
 
 const app = express();
 
@@ -57,6 +58,7 @@ app.get('/readyz', async (_req, res) => {
 });
 
 app.use('/api', lookupRouter);
+app.use('/api', statsRouter);
 
 // 404 fallback after every real route is registered. We register it inside
 // `start()` so future steps can `app.use(...)` more routes before this fires.
