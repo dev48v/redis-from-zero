@@ -1,0 +1,43 @@
+# STEP 11 — Render Blueprint.
+#
+# Two services in one file:
+#   1. `redis-from-zero-redis`   — Redis 7, Render's Key Value (free tier 25 MB)
+#   2. `redis-from-zero-api`     — Docker web service running server/Dockerfile
+#
+# `fromService.connectionString` wires Redis credentials into the API at
+# deploy time so we never paste them by hand.
+
+services:
+  - type: keyvalue
+    name: redis-from-zero-redis
+    region: oregon
+    plan: free
+    ipAllowList: []         # private network only — API connects via internal hostname
+    maxmemoryPolicy: allkeys-lru
+
+  - type: web
+    name: redis-from-zero-api
+    runtime: docker
+    region: oregon
+    plan: free
+    dockerfilePath: ./server/Dockerfile
+    dockerContext: .
+    healthCheckPath: /healthz
+    envVars:
+      - key: PORT
+        value: 8080
+      - key: NODE_ENV
+        value: production
+      - key: CACHE_TTL_SECONDS
+        value: 3600
+      - key: RECENT_LIST_MAX
+        value: 10
+      - key: UPSTREAM_TIMEOUT_MS
+        value: 5000
+      - key: CORS_ORIGIN
+        value: "*"           # tighten to the Vercel origin once it's known
+      - key: REDIS_URL
+        fromService:
+          name: redis-from-zero-redis
+          type: keyvalue
+          property: connectionString
