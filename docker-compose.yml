@@ -1,0 +1,45 @@
+# STEP 7 — Local dev compose stack.
+#
+# `docker compose up --build` boots:
+#   - api    : the Express server, built from server/Dockerfile, port 8080
+#   - redis  : redis:7-alpine, port 6379, named volume so data survives restarts
+#
+# The server connects to redis by service name (`redis`) — Docker's embedded
+# DNS resolves that to the redis container's IP without us ever touching it.
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      PORT: 8080
+      REDIS_URL: redis://redis:6379
+      CACHE_TTL_SECONDS: 3600
+      RECENT_LIST_MAX: 10
+      CORS_ORIGIN: "*"
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    # `--save` here disables Redis's RDB snapshots inside the container so
+    # we don't get warnings about read-only filesystems. The named volume
+    # below still gives us durability via the AOF append-only file.
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  redis-data:
