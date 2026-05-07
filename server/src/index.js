@@ -8,6 +8,7 @@ import express from 'express';
 import cors from 'cors';
 import { config } from './config.js';
 import { log } from './logger.js';
+import { redis, isRedisReady } from './redis.js';
 
 const app = express();
 
@@ -37,7 +38,21 @@ app.use((req, res, next) => {
 // no Redis ping here, because we want the container marked alive even when
 // Redis is briefly unreachable (the lookup route still returns a 503).
 app.get('/healthz', (_req, res) => {
-  res.json({ status: 'ok', uptime: process.uptime() });
+  res.json({ status: 'ok', uptime: process.uptime(), redis: isRedisReady() });
+});
+
+// Readiness probe. Unlike /healthz, this returns 503 if Redis isn't connected
+// — useful for load balancers that should skip this instance during outages.
+app.get('/readyz', async (_req, res) => {
+  if (!isRedisReady()) {
+    return res.status(503).json({ status: 'redis_not_ready' });
+  }
+  try {
+    const pong = await redis.ping();
+    res.json({ status: pong === 'PONG' ? 'ok' : 'unexpected', pong });
+  } catch (err) {
+    res.status(503).json({ status: 'redis_ping_failed', error: err.message });
+  }
 });
 
 // 404 fallback after every real route is registered. We register it inside
